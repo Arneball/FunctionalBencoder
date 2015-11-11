@@ -56,7 +56,7 @@ class BencSpec extends FlatSpec with Matchers {
 
   it should "be able to remove trackers, save and reparse" in {
     val newF = parseAndRemoveTrackers
-    val tempFile = File.createTempFile("bajs", "bajs")
+    val tempFile = File.createTempFile("pooh", "pooh")
     tempFile.deleteOnExit()
     Decoder(tempFile) = newF
     assert(Decoder(tempFile) === newF)

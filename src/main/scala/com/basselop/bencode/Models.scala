@@ -58,13 +58,16 @@ case class BDict(values: Map[BString, BEnc]) extends BEnc {
     copy(values + (("announce-list", BList(that: _*))))
   }
 
-  override def toBytes: Seq[Byte] = values.foldLeft("d".asciiBytes) {
-    case (acc, (k, v)) ⇒ acc ++ k.toBytes ++ v.toBytes
-  } ++ BEnd.instance.toBytes
+  override def toBytes: Seq[Byte] = {
+    val builder = values.foldLeft(Vector.newBuilder ++= "d".asciiBytes) {
+      case (acc, (k, v)) ⇒ acc ++= k.toBytes ++= v.toBytes
+    } ++= BEnd.instance.toBytes
+    builder.result
+  }
 }
 object BDict extends BEncCompanion[BDict] {
   private type Acc = Map[BString, BEnc]
-  private def parsePairs(chars: Stream[Byte], acc: Acc): (BDict, Stream[Byte]) = chars match {
+  @tailrec private def parsePairs(chars: Stream[Byte], acc: Acc): (BDict, Stream[Byte]) = chars match {
     case BEnd(_, rest)                   ⇒ BDict(acc) -> rest
     case BString(key, BEnc(value, rest)) ⇒ parsePairs(rest, acc + (key -> value))
   }
@@ -78,9 +81,12 @@ object BDict extends BEncCompanion[BDict] {
 }
 
 case class BList(values: BEnc*) extends BEnc {
-  override def toBytes: Seq[Byte] = values.foldLeft("l".asciiBytes.toVector) {
-    _ ++ _.toBytes
-  } ++ BEnd.instance.toBytes
+  override def toBytes: Seq[Byte] = {
+    val builder = values.foldLeft(Vector.newBuilder ++= "l".asciiBytes.toVector) {
+      _ ++= _.toBytes
+    } ++= BEnd.instance.toBytes
+    builder.result()
+  }
 }
 object BList extends BEncCompanion[BList] {
   @tailrec private def doParse(chars: Stream[Byte], acc: List[BEnc] = Nil): (BList, Stream[Byte]) = chars match {
