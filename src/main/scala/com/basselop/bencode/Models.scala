@@ -3,14 +3,25 @@ package com.basselop.bencode
 import Implicits._
 
 import scala.annotation.tailrec
+import scala.collection.mutable
+import scala.util.Try
 
-sealed trait BEnc {
+sealed abstract class BEnc {
   def toBytes: Seq[Byte]
+  def apply(k: BString): BEnc = throw new NoSuchElementException
+  final def get(k: BString) = Try { apply(k) }.toOption
+  protected final def genBytes[T](start: String, values: Iterable[T])(fun: (mutable.Builder[Byte, Vector[Byte]], T) ⇒ Unit) = {
+    val builder = Vector.newBuilder ++= start.asciiBytes
+    values.foreach { t ⇒
+      fun(builder, t)
+    }
+    builder ++= BEnd.instance.toBytes
+    builder.result()
+  }
 }
 
 sealed trait BEncCompanion[T <: BEnc] {
-  type Ret = Option[(T, Stream[Byte])]
-  def unapply(chars: Stream[Byte]): Ret
+  def unapply(chars: Stream[Byte]): Option[(T, Stream[Byte])]
 }
 
 object BEnc extends BEncCompanion[BEnc] {
@@ -37,7 +48,7 @@ case class BString(value: Seq[Byte]) extends BEnc {
 }
 object BString extends BEncCompanion[BString] {
   def unapply(chars: Stream[Byte]) = chars match {
-    case Digit(digit, _colon #:: sublist) ⇒
+    case Digit(digit, _ +: sublist) ⇒
       val (str, rest) = sublist.splitAt(digit)
       Some(new BString(str.toIndexedSeq), rest)
     case _ ⇒ None
@@ -52,17 +63,33 @@ case class BDict(values: Map[BString, BEnc]) extends BEnc {
     val newValues = trackers.foldLeft(values) { _ - _ }
     copy(newValues)
   }
+
+  override def apply(k: BString) = values(k)
+
   def withAnnounce(str: String) = copy(values + (("announce", str)))
   def withAnnounces(str: String*) = {
+    val existingList = values.getOrElse("announce-list", BList())
     val that = str.map { s ⇒ BList(s) } // list of lists of strings
-    copy(values + (("announce-list", BList(that: _*))))
+    val newElems = existingList match {
+      case bl: BList ⇒ BList(bl.values ++ that: _*)
+      case _         ⇒ BList(that: _*)
+    }
+    copy(values + (("announce-list", newElems)))
   }
 
-  override def toBytes: Seq[Byte] = {
-    val builder = values.foldLeft(Vector.newBuilder ++= "d".asciiBytes) {
-      case (acc, (k, v)) ⇒ acc ++= k.toBytes ++= v.toBytes
-    } ++= BEnd.instance.toBytes
-    builder.result
+  def setPrivate = {
+    values.get("info") match {
+      case Some(d: BDict) ⇒
+        val newInfo = d.copy(d.values + (("private", BInt(1))))
+        copy(values + (("info", newInfo)))
+      case _ ⇒
+        this
+    }
+  }
+
+  override def toBytes = genBytes("d", values) {
+    case (builder, (k, v)) ⇒
+      builder ++= k.toBytes ++= v.toBytes
   }
 }
 object BDict extends BEncCompanion[BDict] {
@@ -81,12 +108,7 @@ object BDict extends BEncCompanion[BDict] {
 }
 
 case class BList(values: BEnc*) extends BEnc {
-  override def toBytes: Seq[Byte] = {
-    val builder = values.foldLeft(Vector.newBuilder ++= "l".asciiBytes.toVector) {
-      _ ++= _.toBytes
-    } ++= BEnd.instance.toBytes
-    builder.result()
-  }
+  override def toBytes = genBytes("l", values) { _ ++= _.toBytes }
 }
 object BList extends BEncCompanion[BList] {
   @tailrec private def doParse(chars: Stream[Byte], acc: List[BEnc] = Nil): (BList, Stream[Byte]) = chars match {
@@ -95,9 +117,8 @@ object BList extends BEncCompanion[BList] {
   }
 
   def unapply(chars: Stream[Byte]) = chars match {
-    case 'l' #:: rest ⇒
-      Some(doParse(rest))
-    case _ ⇒ None
+    case 'l' #:: rest ⇒ Some(doParse(rest))
+    case _            ⇒ None
   }
 }
 

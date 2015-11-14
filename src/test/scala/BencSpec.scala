@@ -23,7 +23,7 @@ class BencSpec extends FlatSpec with Matchers {
   def apply(str: String) = Decoder.apply(str).map { _._1 }.get
 
   "A simple torrent parser" should "be able to parse a list" in {
-    apply("l4:spam4:eggse") === BList("spam", "eggs")
+    assert(apply("l4:spam4:eggse") === BList("spam", "eggs"))
   }
 
   it should "be able to parse an empty list" in {
@@ -52,6 +52,21 @@ class BencSpec extends FlatSpec with Matchers {
   it should "be able to remove trackers" in {
     val newF: BDict = parseAndRemoveTrackers
     assert(newF.values.get("announce-list").isEmpty)
+  }
+
+  it should "have a proper `piece length`" in {
+    val d = parseFile match {
+      case b: BDict ⇒ b
+    }
+    val that = d.get("info").flatMap {
+      case d: BDict ⇒ d.get("piece length")
+      case _        ⇒ None
+    }.collect {
+      case b: BInt ⇒ b.value
+    }
+    assert {
+      that.exists(0 < _)
+    }
   }
 
   it should "be able to remove trackers, save and reparse" in {
