@@ -4,13 +4,24 @@ import Implicits._
 
 import scala.annotation.tailrec
 import scala.collection.mutable
+import scala.collection.mutable.ListBuffer
 import scala.util.Try
 
 sealed abstract class BEnc {
+  /** Convert this instance to a `Array[Byte]`
+    * @return a bencoded serialized version
+    */
   def toBytes: Seq[Byte]
   def apply(k: BString): BEnc = throw new NoSuchElementException
   final def get(k: BString) = Try { apply(k) }.toOption
-  protected final def genBytes[T](start: String, values: Iterable[T])(fun: (mutable.Builder[Byte, Vector[Byte]], T) ⇒ Unit) = {
+
+  /**
+    * Convenience function
+    * @param start value that delimits the start of the given list or dict
+    * @param values the values that should be serialized to bencoded form
+    * @return a sequence of bytes
+    */
+  protected final def genBytes[T](start: String, values: Iterable[T])(fun: (mutable.Builder[Byte, Vector[Byte]], T) ⇒ Unit): Seq[Byte] = {
     val builder = Vector.newBuilder ++= start.asciiBytes
     values.foreach { t ⇒
       fun(builder, t)
@@ -20,7 +31,15 @@ sealed abstract class BEnc {
   }
 }
 
+/** Companion trait
+  * defines unapply method functionality
+  * */
 sealed trait BEncCompanion[T <: BEnc] {
+  /**
+    * Tries to extract a T from a Stream[Byte]
+    * @param chars
+    * @return if successfull a Some[(T, Stream[Byte])] where the second element is the remaining stream of bytes
+    */
   def unapply(chars: Stream[Byte]): Option[(T, Stream[Byte])]
 }
 
@@ -111,13 +130,13 @@ case class BList(values: BEnc*) extends BEnc {
   override def toBytes = genBytes("l", values) { _ ++= _.toBytes }
 }
 object BList extends BEncCompanion[BList] {
-  @tailrec private def doParse(chars: Stream[Byte], acc: List[BEnc] = Nil): (BList, Stream[Byte]) = chars match {
-    case BEnd(_, rest)    ⇒ BList(acc.reverse: _*) -> rest
-    case BEnc(that, rest) ⇒ doParse(rest, that :: acc)
+  @tailrec private def doParse(chars: Stream[Byte], acc: ListBuffer[BEnc]): (BList, Stream[Byte]) = chars match {
+    case BEnd(_, rest)    ⇒ BList(acc.result(): _*) -> rest
+    case BEnc(that, rest) ⇒ doParse(rest, acc += that)
   }
 
   def unapply(chars: Stream[Byte]) = chars match {
-    case 'l' #:: rest ⇒ Some(doParse(rest))
+    case 'l' #:: rest ⇒ Some(doParse(rest, new ListBuffer))
     case _            ⇒ None
   }
 }
