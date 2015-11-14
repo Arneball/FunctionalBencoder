@@ -5,7 +5,7 @@ import Implicits._
 import org.scalatest._
 
 class BencSpec extends FlatSpec with Matchers {
-  private def parseFile: BEnc = {
+  private def parseFile(): BEnc = {
     val fileName = "torrent.torrent"
     val loader = getClass.getClassLoader
     val file = loader.getResource(fileName).getFile
@@ -14,7 +14,7 @@ class BencSpec extends FlatSpec with Matchers {
   }
 
   private def parseAndRemoveTrackers: BDict = {
-    val f = parseFile.asInstanceOf[BDict]
+    val f = parseFile().asInstanceOf[BDict]
     assert(f.values.get("announce-list").isDefined)
     val newF = f.withoutAnnounce
     newF
@@ -39,7 +39,7 @@ class BencSpec extends FlatSpec with Matchers {
   }
 
   it should "be able to parse a torrent file" in {
-    val decoded = parseFile
+    val decoded = parseFile()
     assert(decoded != BDict())
   }
 
@@ -55,7 +55,7 @@ class BencSpec extends FlatSpec with Matchers {
   }
 
   it should "have a proper `piece length`" in {
-    val d = parseFile match {
+    val d = parseFile() match {
       case b: BDict ⇒ b
     }
     val that = d.get("info").flatMap {

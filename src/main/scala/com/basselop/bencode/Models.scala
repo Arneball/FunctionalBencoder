@@ -8,19 +8,20 @@ import scala.collection.mutable.ListBuffer
 import scala.util.Try
 
 sealed abstract class BEnc {
-  /** Convert this instance to a `Array[Byte]`
-    * @return a bencoded serialized version
-    */
+  /**
+   * Convert this instance to a `Array[Byte]`
+   * @return a bencoded serialized version
+   */
   def toBytes: Seq[Byte]
   def apply(k: BString): BEnc = throw new NoSuchElementException
   final def get(k: BString) = Try { apply(k) }.toOption
 
   /**
-    * Convenience function
-    * @param start value that delimits the start of the given list or dict
-    * @param values the values that should be serialized to bencoded form
-    * @return a sequence of bytes
-    */
+   * Convenience function
+   * @param start value that delimits the start of the given list or dict
+   * @param values the values that should be serialized to bencoded form
+   * @return a sequence of bytes
+   */
   protected final def genBytes[T](start: String, values: Iterable[T])(fun: (mutable.Builder[Byte, Vector[Byte]], T) ⇒ Unit): Seq[Byte] = {
     val builder = Vector.newBuilder ++= start.asciiBytes
     values.foreach { t ⇒
@@ -31,21 +32,39 @@ sealed abstract class BEnc {
   }
 }
 
-/** Companion trait
-  * defines unapply method functionality
-  * */
+/**
+ * Companion trait
+ * defines unapply method functionality
+ */
 sealed trait BEncCompanion[T <: BEnc] {
   /**
-    * Tries to extract a T from a Stream[Byte]
-    * @param chars
-    * @return if successfull a Some[(T, Stream[Byte])] where the second element is the remaining stream of bytes
-    */
+   * Tries to extract a T from a Stream[Byte]
+   * @param chars
+   * @return if successfull a Some[(T, Stream[Byte])] where the second element is the remaining stream of bytes
+   */
   def unapply(chars: Stream[Byte]): Option[(T, Stream[Byte])]
 }
 
 object BEnc extends BEncCompanion[BEnc] {
   private val extractors = Stream(BInt, BString, BDict, BList, BEnd)
   def unapply(chars: Stream[Byte]) = extractors.flatMap { _.unapply(chars) }.headOption
+
+  def apply(values: (String, BEnc)*) = {
+    val map = values.map {
+      case (k, v) ⇒
+        BString(k) -> v
+    }.toMap
+    new BDict(map)
+  }
+
+  def mk(v: (String, Wrapped[_])*) = {
+    val mapped = v.map { case (a, b) ⇒ a -> b.ben }
+    apply(mapped: _*)
+  }
+
+  implicit class Wrapped[T: ToBen](t: T) {
+    val ben = implicitly[ToBen[T]].apply(t)
+  }
 }
 
 case class BEnd private () extends BEnc {
@@ -67,7 +86,7 @@ case class BString(value: Seq[Byte]) extends BEnc {
 }
 object BString extends BEncCompanion[BString] {
   def unapply(chars: Stream[Byte]) = chars match {
-    case Digit(digit, _ +: sublist) ⇒
+    case Digit(digit, _ #:: sublist) ⇒
       val (str, rest) = sublist.splitAt(digit)
       Some(new BString(str.toIndexedSeq), rest)
     case _ ⇒ None
@@ -147,7 +166,7 @@ case class BInt(value: Long) extends BEnc {
 object BInt extends BEncCompanion[BInt] {
   def unapply(chars: Stream[Byte]) = chars match {
     case 'i' #:: rest1 ⇒
-      val (int, _ +: rest) = rest1.span('e' != _)
+      val (int, _ #:: rest) = rest1.span('e' != _)
       val string = int.map { _.toChar }.mkString
       val long = string.toLong
       Some(BInt(long), rest)
