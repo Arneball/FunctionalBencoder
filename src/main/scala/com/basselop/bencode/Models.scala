@@ -6,7 +6,9 @@ import scala.annotation.tailrec
 import scala.collection.generic.CanBuildFrom
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
+import scala.language.implicitConversions
 import scala.util.Try
+import Function.tupled
 
 sealed abstract class BEnc {
   /**
@@ -51,20 +53,25 @@ object BEnc extends BEncCompanion[BEnc] {
   def unapply(chars: Stream[Byte]) = extractors.flatMap { _.unapply(chars) }.headOption
 
   def apply(values: (String, BEnc)*) = {
-    val map = values.map {
-      case (k, v) ⇒
-        BString(k) -> v
-    }.toMap
+    val map = values.map { tupled { BString(_) -> _ } }.toMap
     new BDict(map)
   }
 
-  def mk(v: (String, Wrapped[_])*) = {
-    val mapped = v.map { case (a, b) ⇒ a -> b.ben }
+  trait Wrapped {
+    val ben: BEnc
+  }
+
+  def list(v: Wrapped*): Wrapped = new Wrapped { override val ben = BList(v.map { _.ben }: _*) }
+
+  def mk(v: (String, Wrapped)*): BDict = {
+    val mapped = v.map { tupled { _ -> _.ben } }
     apply(mapped: _*)
   }
 
-  implicit class Wrapped[T: ToBen](t: T) {
-    val ben = implicitly[ToBen[T]].apply(t)
+  implicit def wrap(t: BEnc): Wrapped = new Wrapped { override val ben = t }
+
+  implicit def wrap[T](t: T)(implicit toBen: ToBen[T]): Wrapped = new Wrapped {
+    override val ben: BEnc = toBen(t)
   }
 }
 
@@ -112,18 +119,21 @@ case class BDict(values: Map[BString, BEnc]) extends BEnc {
     copy(values + (("announce-list", newElems)))
   }
 
-  def setPrivate = values.get("info") match {
+  def setPrivate() = values.get("info") match {
     case Some(d: BDict) ⇒
-      val newInfo = d.copy(d.values + (("private", BInt(1))))
+      val newInfo = d.copy(d.values + privateProperty)
       copy(values + (("info", newInfo)))
     case _ ⇒
-      copy(values + (("info", BDict(BString("private") -> BInt(1)))))
+      copy(values + (("info", makePrivateDict)))
   }
 
   override def toBytes = genBytes("d", values) {
     case (builder, (k, v)) ⇒
       builder ++= k.toBytes ++= v.toBytes
   }
+
+  private def privateProperty = BString("private") -> BInt(1)
+  private def makePrivateDict = BDict(privateProperty)
 }
 object BDict extends BEncCompanion[BDict] {
   private type Acc = Map[BString, BEnc]
@@ -175,7 +185,7 @@ case class BInt(value: Long) extends BEnc {
 object BInt extends BEncCompanion[BInt] {
   def unapply(chars: Stream[Byte]) = chars match {
     case 'i' #:: rest1 ⇒
-      val (int, _ #:: rest) = rest1.span('e' !=)
+      val (int, _ #:: rest) = rest1.span('e' != _)
       val string = int.map { _.toChar }.mkString
       val long = string.toLong
       Some(BInt(long), rest)

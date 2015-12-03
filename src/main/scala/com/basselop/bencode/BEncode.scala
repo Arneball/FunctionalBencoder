@@ -34,21 +34,19 @@ object Decoder {
     } finally stream.close()
   }
 
-  def apply(f: File): BEnc = {
-    val br = new BufferedInputStream(new FileInputStream(f))
-    var isClosed = false
-    def mkStream: Stream[Byte] = {
-      br.read() match {
-        case -1 ⇒
-          br.close()
-          isClosed = true
-          Stream.empty
-        case n ⇒
-          n.toByte #:: mkStream
-      }
-    }
+  private def withStream(f: Stream[Byte], c: Closeable) = {
     try {
-      BEnc.unapply(mkStream).get._1
-    } finally if (!isClosed) br.close()
+      BEnc.unapply(f).get._1
+    } finally c.close()
   }
+
+  def apply(i: InputStream): BEnc = {
+    def mkStream: Stream[Byte] = i.read() match {
+      case -1 ⇒ Stream.empty
+      case n  ⇒ n.toByte #:: mkStream
+    }
+    withStream(mkStream, i)
+  }
+
+  def apply(f: File): BEnc = apply(new BufferedInputStream(new FileInputStream(f)))
 }

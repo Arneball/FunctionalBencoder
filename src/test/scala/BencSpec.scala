@@ -4,16 +4,21 @@ import com.basselop.bencode._
 import Implicits._
 import org.specs2.matcher.Matchers
 import org.specs2.mutable.Specification
-
+import BEnc.{ mk, list }
 import scala.collection.mutable
 
 class BencSpec extends Specification with Matchers {
   private def parseFile(): BEnc = {
-    val fileName = "torrent.torrent"
-    val loader = getClass.getClassLoader
-    val file = loader.getResource(fileName).getFile
+    val file: String = getTestTorrent
     val decoded = Decoder(new File(file))
     decoded
+  }
+
+  private def getTestTorrent: String = {
+    val loader = getClass.getClassLoader
+    val fileName = "torrent.torrent"
+    val file = loader.getResource(fileName).getFile
+    file
   }
 
   private def parseAndRemoveTrackers: BDict = {
@@ -22,8 +27,6 @@ class BencSpec extends Specification with Matchers {
     val newF = f.withoutAnnounce
     newF
   }
-
-  implicit def str2benstr(str: String): BString = new BString(str)
 
   def apply(str: String) = Decoder.apply(str).map { _._1 }.get
 
@@ -99,27 +102,27 @@ class BencSpec extends Specification with Matchers {
     }
 
     "create a Benc using factory method" in {
-      BEnc.apply("Kalle" -> BInt(1)) must_=== BDict(new BString("Kalle") -> BInt(1))
+      BEnc.apply("Kalle" -> BInt(1)) must_=== mk("Kalle" -> 1)
     }
 
     "add announce to bdict" in {
-      BDict().withAnnounce("kalle") must_=== BDict(("announce": BString) -> ("kalle": BString))
+      BDict().withAnnounce("kalle") must_=== mk("announce" -> "kalle")
     }
 
     "add multiple announce to bdict" in {
-      BDict().withAnnounces("a", "b") must_=== BDict(("announce-list": BString) -> BList(BList("a"), BList("b")))
+      BDict().withAnnounces("a", "b") must_=== mk("announce-list" -> list(list("a"), list("b")))
     }
 
     "add multiple announce to existing announcelist which in turn is bogus" in {
-      BDict(("announce-list": BString) -> BInt(2)).withAnnounces("a", "b") must_=== BDict(("announce-list": BString) -> BList(BList("a"), BList("b")))
+      mk("announce-list" -> 2).withAnnounces("a", "b") must_=== mk("announce-list" -> list(list("a"), list("b")))
     }
 
     "set private to empty Bdict" in {
-      BDict().setPrivate must_=== BDict(BString("info") -> BDict(BString("private") -> BInt(1)))
+      BDict().setPrivate must_=== mk("info" -> mk("private" -> 1))
     }
 
     "set private to Bdict with info field" in {
-      BDict(BString("info") -> BDict()).setPrivate must_=== BDict(BString("info") -> BDict(BString("private") -> BInt(1)))
+      mk("info" -> mk()).setPrivate must_=== mk("info" -> mk("private" -> 1))
     }
 
     "BList unapply Stream.Empty == None" in {
@@ -129,6 +132,32 @@ class BencSpec extends Specification with Matchers {
     "canBuildFrom apply methods" in {
       BList.cbf.apply(Nil).result() must_== BList()
       BDict.cbf.apply(BDict()).result() must_== BDict()
+    }
+
+    "BDuration apply method" in {
+      import concurrent.duration._
+      ToBen.BenDuration(10 seconds) must_=== BInt(10)
+    }
+
+    "ToBen[Seq]" in {
+      import BEnc._
+      ToBen.seq[Int].apply(List(1, 2, 3)) must_== list(1, 2, 3).ben
+    }
+
+    "ParsedArgs with most params set " in {
+      val pargs = List("-f", getTestTorrent, "-a", "bla", "-o", "bla", "-r", "bla")
+      var args = ParsedArgs.parseArgs(pargs)
+      args.f mustNotEqual null
+      args = ParsedArgs.parseArgs(List("-f", getTestTorrent, "-r", "*"))
+      args.remAllTrackers must beTrue
+    }
+
+    "ParsedArgs with faulty file" in {
+      ParsedArgs.parseArgs(List("-f", "Slask")) must throwA[FileNotFoundException]
+    }
+
+    "ParsedArg with faulty flag" in {
+      ParsedArgs.parseArgs(List("-katt", "tre")) must throwA[IllegalArgumentException]
     }
   }
 }
