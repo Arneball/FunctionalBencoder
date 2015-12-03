@@ -76,4 +76,24 @@ class BencSpec extends FlatSpec with Matchers {
     Decoder(tempFile) = newF
     assert(Decoder(tempFile) === newF)
   }
+
+  it should "be able to parse BList from Scala Seqs" in {
+    val items = List(BInt(1), BString(""))
+    val wantedRes: BList = BList(BInt(1), BString(""))
+    assert(items.to[({ type T[_] = BList })#T] == wantedRes)
+    assert {
+      val newThat: BList = items.map(identity)(collection.breakOut)
+      newThat == wantedRes
+    }
+  }
+
+  it should "be able to parse BDict from Scala Maps" in {
+    val map = Map(BString("Arne") -> BInt(1))
+    val dict: BDict = map.map(identity)(collection.breakOut)
+    assert {
+      dict.values.get("Arne").collectFirst {
+        case i: BInt ⇒ i.value
+      }.contains(1L)
+    }
+  }
 }

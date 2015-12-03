@@ -3,6 +3,7 @@ package com.basselop.bencode
 import Implicits._
 
 import scala.annotation.tailrec
+import scala.collection.generic.CanBuildFrom
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.util.Try
@@ -86,7 +87,7 @@ case class BString(value: Seq[Byte]) extends BEnc {
 }
 object BString extends BEncCompanion[BString] {
   def unapply(chars: Stream[Byte]) = chars match {
-    case Digit(digit, _ #:: sublist) ⇒
+    case Digit(digit, 'e' #:: sublist) ⇒
       val (str, rest) = sublist.splitAt(digit)
       Some(new BString(str.toIndexedSeq), rest)
     case _ ⇒ None
@@ -115,14 +116,12 @@ case class BDict(values: Map[BString, BEnc]) extends BEnc {
     copy(values + (("announce-list", newElems)))
   }
 
-  def setPrivate = {
-    values.get("info") match {
-      case Some(d: BDict) ⇒
-        val newInfo = d.copy(d.values + (("private", BInt(1))))
-        copy(values + (("info", newInfo)))
-      case _ ⇒
-        this
-    }
+  def setPrivate = values.get("info") match {
+    case Some(d: BDict) ⇒
+      val newInfo = d.copy(d.values + (("private", BInt(1))))
+      copy(values + (("info", newInfo)))
+    case _ ⇒
+      this
   }
 
   override def toBytes = genBytes("d", values) {
@@ -143,6 +142,13 @@ object BDict extends BEncCompanion[BDict] {
   }
 
   def apply(args: (BString, BEnc)*) = new BDict(args.toMap)
+
+  implicit object cbf extends CanBuildFrom[BEnc, (BString, BEnc), BDict] {
+    override def apply(from: BEnc): mutable.Builder[(BString, BEnc), BDict] = apply()
+    override def apply(): mutable.Builder[(BString, BEnc), BDict] = Map.newBuilder.mapResult { that: Map[BString, BEnc] ⇒
+      new BDict(that)
+    }
+  }
 }
 
 case class BList(values: BEnc*) extends BEnc {
@@ -158,6 +164,13 @@ object BList extends BEncCompanion[BList] {
     case 'l' #:: rest ⇒ Some(doParse(rest, new ListBuffer))
     case _            ⇒ None
   }
+
+  implicit object cbf extends CanBuildFrom[Seq[BEnc], BEnc, BList] {
+    override def apply(from: Seq[BEnc]): mutable.Builder[BEnc, BList] = apply()
+    override def apply(): mutable.Builder[BEnc, BList] = ListBuffer().mapResult { values ⇒
+      BList(values: _*)
+    }
+  }
 }
 
 case class BInt(value: Long) extends BEnc {
@@ -166,7 +179,7 @@ case class BInt(value: Long) extends BEnc {
 object BInt extends BEncCompanion[BInt] {
   def unapply(chars: Stream[Byte]) = chars match {
     case 'i' #:: rest1 ⇒
-      val (int, _ #:: rest) = rest1.span('e' != _)
+      val (int, 'e' #:: rest) = rest1.span('e' !=)
       val string = int.map { _.toChar }.mkString
       val long = string.toLong
       Some(BInt(long), rest)
