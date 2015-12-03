@@ -14,7 +14,6 @@ object TorrentDecoder {
     val result = Decoder(path).asInstanceOf[BDict]
     val newRes = (remAll, remtrackers) match {
       case (true, _) ⇒ result.withoutAnnounce
-      case (_, that) ⇒ result.withoutAnnounce(that)
     }
     val newRes2 = newRes.withAnnounces(addTrackers: _*)
     val outPath = out match {

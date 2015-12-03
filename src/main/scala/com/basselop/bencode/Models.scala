@@ -87,7 +87,7 @@ case class BString(value: Seq[Byte]) extends BEnc {
 }
 object BString extends BEncCompanion[BString] {
   def unapply(chars: Stream[Byte]) = chars match {
-    case Digit(digit, 'e' #:: sublist) ⇒
+    case Digit(digit, _ #:: sublist) ⇒
       val (str, rest) = sublist.splitAt(digit)
       Some(new BString(str.toIndexedSeq), rest)
     case _ ⇒ None
@@ -98,10 +98,6 @@ object BString extends BEncCompanion[BString] {
 
 case class BDict(values: Map[BString, BEnc]) extends BEnc {
   def withoutAnnounce = copy(values - "announce" - "announce-list")
-  def withoutAnnounce(trackers: List[String]) = {
-    val newValues = trackers.foldLeft(values) { _ - _ }
-    copy(newValues)
-  }
 
   override def apply(k: BString) = values(k)
 
@@ -121,7 +117,7 @@ case class BDict(values: Map[BString, BEnc]) extends BEnc {
       val newInfo = d.copy(d.values + (("private", BInt(1))))
       copy(values + (("info", newInfo)))
     case _ ⇒
-      this
+      copy(values + (("info", BDict(BString("private") -> BInt(1)))))
   }
 
   override def toBytes = genBytes("d", values) {
@@ -179,7 +175,7 @@ case class BInt(value: Long) extends BEnc {
 object BInt extends BEncCompanion[BInt] {
   def unapply(chars: Stream[Byte]) = chars match {
     case 'i' #:: rest1 ⇒
-      val (int, 'e' #:: rest) = rest1.span('e' !=)
+      val (int, _ #:: rest) = rest1.span('e' !=)
       val string = int.map { _.toChar }.mkString
       val long = string.toLong
       Some(BInt(long), rest)
