@@ -28,21 +28,21 @@ class BencSpec extends Specification with Matchers {
     newF
   }
 
-  def apply(str: String) = Decoder.apply(str).map { _._1 }.get
+  def apply(str: String): BEnc = Decoder.apply(str).map { _._1 }.get
 
   "A simple torrent parser" should {
     "be able to parse a list" in {
-      apply("l4:spam4:eggse") must_=== BList("spam", "eggs")
+      apply("l4:spam4:eggse") ==== list("spam", "eggs").ben
     }
     "be able to parse an empty list" in {
-      apply("le") must_=== BList()
+      apply("le") ==== BList()
     }
     "be able to parse a dict" in {
-      apply("d3:cow3:moo4:spam4:eggse") must_=== BDict(BString("cow") -> BString("moo"), BString("spam") -> BString("eggs"))
+      apply("d3:cow3:moo4:spam4:eggse") ==== mk("cow" -> "moo", "spam" -> "eggs")
     }
 
     "be able to parse an empty dict" in {
-      apply("de") must_=== BDict()
+      apply("de") ==== BDict()
     }
 
     "be able to parse a torrent file" in {
@@ -55,7 +55,7 @@ class BencSpec extends Specification with Matchers {
     }
     "be able to remove trackers" in {
       val newF: BDict = parseAndRemoveTrackers
-      newF.values.get("announce-list").isEmpty must beTrue
+      newF.values.get("announce-list") must beEmpty
     }
 
     "have a proper `piece length`" in {
@@ -76,7 +76,7 @@ class BencSpec extends Specification with Matchers {
       val tempFile = File.createTempFile("pooh", "pooh")
       tempFile.deleteOnExit()
       Decoder(tempFile) = newF
-      Decoder(tempFile) must_=== newF
+      Decoder(tempFile) ==== newF
     }
 
     "be able to parse BList from Scala Seqs" in {
@@ -84,7 +84,7 @@ class BencSpec extends Specification with Matchers {
       val wantedRes: BList = BList(BInt(1), BString(""))
       assert(items.to[({ type T[_] = BList })#T] == wantedRes)
       val newThat: BList = items.map(identity)(collection.breakOut)
-      newThat must_=== wantedRes
+      newThat ==== wantedRes
     }
 
     "be able to parse BDict from Scala Maps" in {
@@ -102,31 +102,31 @@ class BencSpec extends Specification with Matchers {
     }
 
     "create a Benc using factory method" in {
-      BEnc.apply("Kalle" -> BInt(1)) must_=== mk("Kalle" -> 1)
+      BEnc.apply("Kalle" -> BInt(1)) ==== mk("Kalle" -> 1)
     }
 
     "add announce to bdict" in {
-      BDict().withAnnounce("kalle") must_=== mk("announce" -> "kalle")
+      BDict().withAnnounce("kalle") ==== mk("announce" -> "kalle")
     }
 
     "add multiple announce to bdict" in {
-      BDict().withAnnounces("a", "b") must_=== mk("announce-list" -> list(list("a"), list("b")))
+      BDict().withAnnounces("a", "b") ==== mk("announce-list" -> list(list("a"), list("b")))
     }
 
     "add multiple announce to existing announcelist which in turn is bogus" in {
-      mk("announce-list" -> 2).withAnnounces("a", "b") must_=== mk("announce-list" -> list(list("a"), list("b")))
+      mk("announce-list" -> 2).withAnnounces("a", "b") ==== mk("announce-list" -> list(list("a"), list("b")))
     }
 
     "set private to empty Bdict" in {
-      BDict().setPrivate must_=== mk("info" -> mk("private" -> 1))
+      BDict().setPrivate ==== mk("info" -> mk("private" -> 1))
     }
 
     "set private to Bdict with info field" in {
-      mk("info" -> mk()).setPrivate must_=== mk("info" -> mk("private" -> 1))
+      mk("info" -> mk()).setPrivate ==== mk("info" -> mk("private" -> 1))
     }
 
     "BList unapply Stream.Empty == None" in {
-      BList.unapply(Stream.empty) must_=== None
+      BList.unapply(Stream.empty) ==== None
     }
 
     "canBuildFrom apply methods" in {
@@ -136,7 +136,7 @@ class BencSpec extends Specification with Matchers {
 
     "BDuration apply method" in {
       import concurrent.duration._
-      ToBen.BenDuration(10 seconds) must_=== BInt(10)
+      ToBen.BenDuration(10 seconds) ==== BInt(10)
     }
 
     "ToBen[Seq]" in {
