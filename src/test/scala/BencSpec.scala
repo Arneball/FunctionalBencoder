@@ -148,16 +148,16 @@ class BencSpec extends Specification with Matchers {
       val pargs = List("-f", getTestTorrent, "-a", "bla", "-o", "bla", "-r", "bla")
       var args = ParsedArgs.parseArgs(pargs)
       args.f mustNotEqual null
-      args = ParsedArgs.parseArgs(List("-f", getTestTorrent, "-r", "*"))
+      args = ParsedArgs.parseArgs(List("-f", getTestTorrent, "-r", "*", "-o", "/tmp/bla"))
       args.remAllTrackers must beTrue
     }
 
     "ParsedArgs with faulty file" in {
-      ParsedArgs.parseArgs(List("-f", "Slask")) must throwA[FileNotFoundException]
+      ParsedArgs.parseArgs(List("-f", "Slask")) must throwA[NoSuchElementException]
     }
 
     "ParsedArg with faulty flag" in {
-      ParsedArgs.parseArgs(List("-katt", "tre")) must throwA[IllegalArgumentException]
+      ParsedArgs.parseArgs(List("-katt", "tre")) must throwA[NoSuchElementException]
     }
   }
 }

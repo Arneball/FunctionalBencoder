@@ -11,6 +11,9 @@ libraryDependencies += "org.specs2" %% "specs2" % "3.3.1"
 
 libraryDependencies += "org.specs2" %% "specs2-scalacheck" % "3.6.6"
 
+libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
+
+
 
 // Uncomment to use Akka
 //libraryDependencies += "com.typesafe.akka" %% "akka-actor" % "2.3.11"

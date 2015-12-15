@@ -13,30 +13,23 @@ case class ParsedArgs(f: File = null,
   addTrackers: List[String] = Nil)
 
 object ParsedArgs {
-  def parseArgs(args: List[String], p: ParsedArgs = ParsedArgs()): ParsedArgs = args match {
-    case Nil ⇒ p
-    case ("-f" | "--file") :: file :: rest ⇒
-      val path = Paths.get(file)
-      if (!Files.exists(path)) {
-        throw new FileNotFoundException(file)
-      }
-      parseArgs(rest, p.copy(f = path.toFile))
-    case ("-a" | "--add") :: path :: rest ⇒
-      parseArgs(rest, p.copy(addTrackers = path.split(",").toList))
-    case ("-o" | "--out") :: out :: rest ⇒
-      parseArgs(rest, p.copy(out = new File(out)))
-    case ("-r" | "--rem") :: "*" :: rest ⇒
-      parseArgs(rest, p.copy(remAllTrackers = true))
-    case ("-r" | "--rem") :: that :: rest ⇒
-      parseArgs(rest, p.copy(remTrackers = that.split(",").toList))
-    case flag :: _ ⇒
-      throw new IllegalArgumentException(
-        s"""Unknown flag: $flag
-           |Usage:
-           |  -f: Path to torrent
-           |  -o: Output path torrent
-           |  -a: add trackers, comma separated
-           |  -r: remove trackers, comma separated or *
-         """.stripMargin)
+  def parseArgs(args: List[String]) = parse.parse(args, ParsedArgs()).get
+
+  private val parse = new scopt.OptionParser[ParsedArgs]("Bencoder") {
+    head("Bencoder", "1.0")
+    opt[Seq[String]]('a', "add") action { (x, a) ⇒
+      a.copy(addTrackers = a.addTrackers ++ x)
+    } text "Trackers to add" valueName "<url1>,<url2>"
+
+    opt[File]('o', "out") action { (f, a) ⇒ a.copy(out = f) } text "Outputfile" required ()
+
+    opt[File]('f', "file") action { (f, a) ⇒ a.copy(f = f) } validate { f ⇒
+      if (f.exists()) success else failure(s"Input file must exist $f")
+    } text "Inputfile" required ()
+
+    opt[String]('r', "rem") action {
+      case ("*", a) ⇒ a.copy(remAllTrackers = true)
+      case (x, a)   ⇒ a.copy(remTrackers = x.split(",").toList)
+    } text "Remove trackers"
   }
 }
