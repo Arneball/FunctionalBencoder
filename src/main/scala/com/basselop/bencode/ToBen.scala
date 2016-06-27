@@ -13,8 +13,7 @@ object ToBen {
   }
   implicit def seq[T: ToBen]: ToBen[Seq[T]] = new ToBen[Seq[T]] {
     override def apply(v1: Seq[T]): BEnc = {
-      val values = v1.map { implicitly[ToBen[T]] }
-      BList(values: _*)
+      BList(v1.map { implicitly[ToBen[T]] }(collection.breakOut))
     }
   }
 

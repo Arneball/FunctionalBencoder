@@ -4,7 +4,7 @@ import com.basselop.bencode._
 import Implicits._
 import org.specs2.matcher.Matchers
 import org.specs2.mutable.Specification
-import BEnc.{ mk, list }
+import BEnc.{ dict, list }
 import scala.collection.mutable
 
 class BencSpec extends Specification with Matchers {
@@ -32,13 +32,13 @@ class BencSpec extends Specification with Matchers {
 
   "A simple torrent parser" should {
     "be able to parse a list" in {
-      apply("l4:spam4:eggse") ==== list("spam", "eggs").ben
+      apply("l4:spam4:eggse") ==== list("spam", "eggs")
     }
     "be able to parse an empty list" in {
       apply("le") ==== BList()
     }
     "be able to parse a dict" in {
-      apply("d3:cow3:moo4:spam4:eggse") ==== mk("cow" -> "moo", "spam" -> "eggs")
+      apply("d3:cow3:moo4:spam4:eggse") ==== dict("cow" -> "moo", "spam" -> "eggs")
     }
 
     "be able to parse an empty dict" in {
@@ -88,7 +88,7 @@ class BencSpec extends Specification with Matchers {
     }
 
     "be able to parse BDict from Scala Maps" in {
-      val map = Map(BString("Arne") -> BInt(1))
+      val map = Map("Arne" -> BInt(1))
       val dict: BDict = map.map(identity)(collection.breakOut)
       dict.values.get("Arne").collectFirst {
         case i: BInt ⇒ i.value
@@ -101,28 +101,24 @@ class BencSpec extends Specification with Matchers {
       new BString("kalle").apply("bla") must throwA[NoSuchElementException]
     }
 
-    "create a Benc using factory method" in {
-      BEnc.apply("Kalle" -> BInt(1)) ==== mk("Kalle" -> 1)
-    }
-
     "add announce to bdict" in {
-      BDict().withAnnounce("kalle") ==== mk("announce" -> "kalle")
+      BDict().withAnnounce("kalle") ==== dict("announce" -> "kalle")
     }
 
     "add multiple announce to bdict" in {
-      BDict().withAnnounces("a", "b") ==== mk("announce-list" -> list(list("a"), list("b")))
+      BDict().withAnnounces("a", "b") ==== dict("announce-list" -> list(list("a"), list("b")))
     }
 
     "add multiple announce to existing announcelist which in turn is bogus" in {
-      mk("announce-list" -> 2).withAnnounces("a", "b") ==== mk("announce-list" -> list(list("a"), list("b")))
+      dict("announce-list" -> 2).withAnnounces("a", "b") ==== dict("announce-list" -> list(list("a"), list("b")))
     }
 
     "set private to empty Bdict" in {
-      BDict().setPrivate ==== mk("info" -> mk("private" -> 1))
+      BDict().setPrivate ==== dict("info" -> dict("private" -> 1))
     }
 
     "set private to Bdict with info field" in {
-      mk("info" -> mk()).setPrivate ==== mk("info" -> mk("private" -> 1))
+      dict("info" -> dict()).setPrivate ==== dict("info" -> dict("private" -> 1))
     }
 
     "BList unapply Stream.Empty == None" in {
@@ -130,8 +126,8 @@ class BencSpec extends Specification with Matchers {
     }
 
     "canBuildFrom apply methods" in {
-      BList.cbf.apply(Nil).result() must_== BList()
-      BDict.cbf.apply(BDict()).result() must_== BDict()
+      BDict.cbf.apply(BDict()).result() ==== BDict()
+      BList.cbf.apply(Nil).result() ==== BList()
     }
 
     "BDuration apply method" in {
@@ -141,7 +137,7 @@ class BencSpec extends Specification with Matchers {
 
     "ToBen[Seq]" in {
       import BEnc._
-      ToBen.seq[Int].apply(List(1, 2, 3)) must_== list(1, 2, 3).ben
+      ToBen.seq[Int].apply(List(1, 2, 3)) ==== list(1, 2, 3)
     }
 
     "ParsedArgs with most params set " in {
@@ -158,6 +154,21 @@ class BencSpec extends Specification with Matchers {
 
     "ParsedArg with faulty flag" in {
       ParsedArgs.parseArgs(List("-katt", "tre")) must throwA[NoSuchElementException]
+    }
+
+    "Add announces to existing list" in {
+      dict("announce-list" -> list()).withAnnounces("a", "b") ==== dict("announce-list" -> list(list("a"), list("b")))
+    }
+
+    "Use overloaded constructor" in {
+      list("a", "b", "c") ==== BList(BString("a"), BString("b"), BString("c"))
+    }
+  }
+
+  "a torrent parser" should {
+    "go both ways" in {
+      val that = BEnc.dict("arne" -> 3, "slask" -> BEnc.list(1, 2))
+      BEnc.unapply(that.toBytes.toStream).get._1 ==== that
     }
   }
 }
