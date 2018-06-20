@@ -1,6 +1,5 @@
 package com.basselop.bencode
 
-import com.basselop.bencode.BEnc.Wrapped
 import com.basselop.bencode.Implicits._
 
 import scala.annotation.tailrec
@@ -8,7 +7,6 @@ import scala.collection.generic.CanBuildFrom
 import scala.collection.immutable.{ IndexedSeq, Seq }
 import scala.collection.mutable
 import scala.language.implicitConversions
-import scala.util.Try
 
 sealed abstract class BEnc {
   /**
@@ -17,8 +15,6 @@ sealed abstract class BEnc {
    * @return a bencoded serialized version
    */
   def toBytes: Seq[Byte]
-  def apply(k: String): BEnc = throw new NoSuchElementException
-  final def get(k: String) = Try { apply(k) }.toOption
 
   /**
    * Convenience function
@@ -69,7 +65,8 @@ object BEnc extends BEncCompanion[BEnc] {
 
   implicit def wrap(t: BEnc): Wrapped = Wrapped(t)
 
-  implicit def wrap[T](t: T)(implicit toBen: ToBen[T]): Wrapped = Wrapped(toBen(t))
+  implicit def wrap[T: ToBen](t: T): Wrapped =
+    Wrapped(implicitly[ToBen[T]].apply(t))
 }
 
 case class BEnd private () extends BEnc {
@@ -103,7 +100,7 @@ object BString extends BEncCompanion[BString] {
 case class BDict(values: Map[String, BEnc]) extends BEnc {
   def withoutAnnounce = copy(values - "announce" - "announce-list")
 
-  override def apply(k: String) = values(k)
+  def get(key: String) = values.get(key)
 
   def withAnnounce(str: String) = copy(values + (("announce", str)))
   def withAnnounces(str: String*) = {
@@ -131,8 +128,10 @@ case class BDict(values: Map[String, BEnc]) extends BEnc {
   private def privateProperty = "private" -> BInt(1)
   private def makePrivateDict = BDict(privateProperty)
 }
+
 object BDict extends BEncCompanion[BDict] {
   private type Acc = mutable.Builder[(String, BEnc), Map[String, BEnc]]
+
   @tailrec private def parsePairs(chars: Bytes, acc: Acc): (BDict, Bytes) = chars match {
     case BEnd(_, rest)                   ⇒ BDict(acc.result()) -> rest
     case BString(key, BEnc(value, rest)) ⇒ parsePairs(rest, acc += (key.realStr -> value))

@@ -6,7 +6,8 @@ import java.nio.file.{ Paths, Files }
 /**
  * Created by arneball on 2015-11-11.
  */
-case class ParsedArgs(f: File = null,
+case class ParsedArgs(
+  f: File = null,
   out: File = null,
   remTrackers: List[String] = Nil,
   remAllTrackers: Boolean = false,

@@ -97,10 +97,6 @@ class BencSpec extends Specification with Matchers {
   }
 
   "to complete coverage a torrent parser library" should {
-    "fail apply method on BString" in {
-      new BString("kalle").apply("bla") must throwA[NoSuchElementException]
-    }
-
     "add announce to bdict" in {
       BDict().withAnnounce("kalle") ==== dict("announce" -> "kalle")
     }
